@@ -1,0 +1,430 @@
+prac1- log reg
+
+import pandas as pd
+import numpy as np
+from sklearn import preprocessing
+import matplotlib.pyplot as plt 
+plt.rc("font", size=14)
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+import seaborn as sns
+sns.set(style="white")
+sns.set(style="whitegrid", color_codes=True)
+
+import warnings
+warnings.simplefilter("ignore")
+
+data=pd.read_csv("bank.csv")
+
+data=data.dropna()
+print(data.shape)
+print(list(data.columns))
+
+data.head()
+
+data['education'].unique()
+
+data['education']=np.where(data['education'] =='basic.9y', 'Basic', data['education'])
+data['education']=np.where(data['education'] =='basic.6y', 'Basic', data['education'])
+data['education']=np.where(data['education'] =='basic.4y', 'Basic', data['education'])
+
+data["education"].unique()
+
+data['y'].value_counts()
+
+sns.countplot(x='y', data=data, palette='hls')
+plt.show()
+plt.savefig('count_plot')
+
+count_no_sub = len(data[data['y']==0])
+count_sub = len(data[data['y']==1])
+pct_of_no_sub = count_no_sub/(count_no_sub+count_sub)
+print("percentage of no subscription is", pct_of_no_sub*100)
+pct_of_sub = count_sub/(count_no_sub+count_sub)
+print("percentage of subscription", pct_of_sub*100)
+
+data.groupby('y').mean()
+
+data.groupby('job').mean()
+
+data.groupby('marital').mean()
+
+data.groupby('education').mean()
+
+%matplotlib inline
+pd.crosstab(data.job,data.y).plot(kind='bar')
+plt.title('Purchase Frequency for Job Title')
+plt.xlabel('Job')
+plt.ylabel('Frequency of Purchase')
+plt.savefig('purchase_fre_job')
+
+table=pd.crosstab(data.marital,data.y)
+table.div(table.sum(1).astype(float), axis=0).plot(kind='bar', stacked=True)
+plt.title('Stacked Bar Chart of Marital Status vs Purchase')
+plt.xlabel('Marital Status')
+plt.ylabel('Proportion of Customers')
+plt.savefig('mariral_vs_pur_stack')
+
+table=pd.crosstab(data.education,data.y)
+table.div(table.sum(1).astype(float), axis=0).plot(kind='bar', stacked=True)
+plt.title('Stacked Bar Chart of Education vs Purchase')
+plt.xlabel('Education')
+plt.ylabel('Proportion of Customers')
+plt.savefig('edu_vs_pur_stack')
+
+pd.crosstab(data.day_of_week,data.y).plot(kind='bar')
+plt.title('Purchase Frequency for Day of Week')
+plt.xlabel('Day of Week')
+plt.ylabel('Frequency of Purchase')
+plt.savefig('pur_dayofweek_bar')
+
+pd.crosstab(data.month,data.y).plot(kind='bar')
+plt.title('Purchase Frequency for Month')
+plt.xlabel('Month')
+plt.ylabel('Frequency of Purchase')
+plt.savefig('pur_fre_month_bar')
+
+data.age.hist()
+plt.title('Histogram of Age')
+plt.xlabel('Age')
+plt.ylabel('Frequency')
+plt.savefig('hist_age')
+
+pd.crosstab(data.poutcome,data.y).plot(kind='bar')
+plt.title('Purchase Frequency for Poutcome')
+plt.xlabel('Poutcome')
+plt.ylabel('Frequency of Purchase')
+plt.savefig('pur_fre_pout_bar')
+
+cat_vars=['job','marital','education','default','housing','loan','contact','month','day_of_week','poutcome']
+for var in cat_vars:
+    cat_list='var'+'_'+var
+    cat_list = pd.get_dummies(data[var], prefix=var)
+    data1=data.join(cat_list)
+    data=data1
+cat_vars=['job','marital','education','default','housing','loan','contact','month','day_of_week','poutcome']
+data_vars=data.columns.values.tolist()
+to_keep=[i for i in data_vars if i not in cat_vars]
+
+data_final=data[to_keep]
+data_final.columns.values
+
+X = data_final.loc[:, data_final.columns != 'y']
+y = data_final.loc[:, data_final.columns == 'y']
+
+from imblearn.over_sampling import SMOTE
+
+os = SMOTE(random_state=0)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=0)
+columns = X_train.columns
+
+os_data_X,os_data_y=os.fit_resample(X_train, y_train)
+os_data_X = pd.DataFrame(data=os_data_X,columns=columns )
+os_data_y= pd.DataFrame(data=os_data_y,columns=['y'])
+# we can Check the numbers of our data
+print("length of oversampled data is ",len(os_data_X))
+print("Number of no subscription in oversampled data",len(os_data_y[os_data_y['y']==0]))
+print("Number of subscription",len(os_data_y[os_data_y['y']==1]))
+print("Proportion of no subscription data in oversampled data is ",len(os_data_y[os_data_y['y']==0])/len(os_data_X))
+print("Proportion of subscription data in oversampled data is ",len(os_data_y[os_data_y['y']==1])/len(os_data_X))
+
+data_final_vars=data_final.columns.values.tolist()
+y=['y']
+X=[i for i in data_final_vars if i not in y]
+from sklearn.feature_selection import RFE
+from sklearn.linear_model import LogisticRegression
+logreg = LogisticRegression()
+rfe = RFE(logreg, n_features_to_select=20)
+rfe = rfe.fit(os_data_X, os_data_y.values.ravel())
+print(rfe.support_)
+print(rfe.ranking_)
+
+cols=['euribor3m', 'job_blue-collar', 'job_housemaid', 'marital_unknown', 'education_illiterate', 'default_no', 'default_unknown', 
+      'contact_cellular', 'contact_telephone', 'month_apr', 'month_aug', 'month_dec', 'month_jul', 'month_jun', 'month_mar', 
+      'month_may', 'month_nov', 'month_oct', "poutcome_failure", "poutcome_success"] 
+X=os_data_X[cols]
+y=os_data_y['y']
+
+import statsmodels.api as sm
+logit_model=sm.Logit(y,X)
+result=logit_model.fit()
+print(result.summary2())
+
+cols=['euribor3m', 'job_blue-collar', 'job_housemaid', 'marital_unknown', 'education_illiterate', 
+      'month_apr', 'month_aug', 'month_dec', 'month_jul', 'month_jun', 'month_mar', 
+      'month_may', 'month_nov', 'month_oct', "poutcome_failure", "poutcome_success"] 
+X=os_data_X[cols]
+y=os_data_y['y']
+logit_model=sm.Logit(y,X)
+result=logit_model.fit()
+print(result.summary2())
+
+from sklearn.linear_model import LogisticRegression
+from sklearn import metrics
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=0)
+logreg = LogisticRegression()
+logreg.fit(X_train, y_train)
+
+y_pred = logreg.predict(X_test)
+print('Accuracy of logistic regression classifier on test set: {:.2f}'.format(logreg.score(X_test, y_test)))
+
+from sklearn.metrics import confusion_matrix
+confusion_matrix = confusion_matrix(y_test, y_pred)
+print(confusion_matrix)
+
+from sklearn.metrics import classification_report
+print(classification_report(y_test, y_pred))
+
+from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_curve
+logit_roc_auc = roc_auc_score(y_test, logreg.predict(X_test))
+fpr, tpr, thresholds = roc_curve(y_test, logreg.predict_proba(X_test)[:,1])
+plt.figure()
+plt.plot(fpr, tpr, label='Logistic Regression (area = %0.2f)' % logit_roc_auc)
+plt.plot([0, 1], [0, 1],'r--')
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('Receiver operating characteristic')
+plt.legend(loc="lower right")
+plt.savefig('Log_ROC')
+plt.show()
+
+
+
+
+prac 2 ridge regression
+
+# load and summarize the housing dataset
+from pandas import read_csv
+from matplotlib import pyplot
+# load dataset
+url = 'https://raw.githubusercontent.com/jbrownlee/Datasets/master/housing.csv'
+dataframe = read_csv(url, header=None)
+# summarize shape
+print(dataframe.shape)
+# summarize first few lines
+print(dataframe.head())
+
+from sklearn.linear_model import Ridge
+
+# define model
+model = Ridge(alpha=1.0)
+
+# evaluate an ridge regression model on the dataset
+from numpy import mean
+from numpy import std
+from numpy import absolute
+from pandas import read_csv
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import RepeatedKFold
+
+# load the dataset
+url = 'https://raw.githubusercontent.com/jbrownlee/Datasets/master/housing.csv'
+dataframe = read_csv(url, header=None)
+data = dataframe.values
+X, y = data[:, :-1], data[:, -1]
+# define model
+model = Ridge(alpha=1.0)
+# define model evaluation method
+cv = RepeatedKFold(n_splits=10, n_repeats=3, random_state=1)
+# evaluate model
+scores = cross_val_score(model, X, y, scoring='neg_mean_absolute_error', cv=cv, n_jobs=-1)
+# force scores to be positive
+scores = absolute(scores)
+print('Mean MAE: %.3f (%.3f)' % (mean(scores), std(scores)))
+
+
+# make a prediction with a ridge regression model on the dataset
+from pandas import read_csv
+from sklearn.linear_model import Ridge
+# load the dataset
+url = 'https://raw.githubusercontent.com/jbrownlee/Datasets/master/housing.csv'
+dataframe = read_csv(url, header=None)
+data = dataframe.values
+X, y = data[:, :-1], data[:, -1]
+# define model
+model = Ridge(alpha=1.0)
+# fit model
+model.fit(X, y)
+# define new data
+row = [0.00632,18.00,2.310,0,0.5380,6.5750,65.20,4.0900,1,296.0,15.30,396.90,4.98]
+# make a prediction
+yhat = model.predict([row])
+# summarize prediction
+print('Predicted: %.3f' % yhat)
+
+#grid search hyperparameters for ridge regression
+from numpy import arange
+from pandas import read_csv
+from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import RepeatedKFold
+from sklearn.linear_model import Ridge
+# load the dataset
+url = 'https://raw.githubusercontent.com/jbrownlee/Datasets/master/housing.csv'
+dataframe = read_csv(url, header=None)
+data = dataframe.values
+X, y = data[:, :-1], data[:, -1]
+# define model
+model = Ridge()
+# define model evaluation method
+cv = RepeatedKFold(n_splits=10, n_repeats=3, random_state=1)
+# define grid
+grid = dict()
+grid['alpha'] = arange(0, 1, 0.01)
+# define search
+search = GridSearchCV(model, grid, scoring='neg_mean_absolute_error', cv=cv, n_jobs=-1)
+# perform the search
+results = search.fit(X, y)
+# summarize
+print('MAE: %.3f' % results.best_score_)
+print('Config: %s' % results.best_params_)
+
+# use automatically configured the ridge regression algorithm
+from numpy import arange
+from pandas import read_csv
+from sklearn.linear_model import RidgeCV
+from sklearn.model_selection import RepeatedKFold
+# load the dataset
+url = 'https://raw.githubusercontent.com/jbrownlee/Datasets/master/housing.csv'
+dataframe = read_csv(url, header=None)
+data = dataframe.values
+X, y = data[:, :-1], data[:, -1]
+# define model evaluation method
+cv = RepeatedKFold(n_splits=10, n_repeats=3, random_state=1)
+# define model
+model = RidgeCV(alphas=arange(0, 1, 0.01), cv=cv, scoring='neg_mean_absolute_error')
+# fit model
+model.fit(X, y)
+# summarize chosen configuration
+print('alpha: %f' % model.alpha_)
+
+
+
+prac 3 Adaboost
+
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import AdaBoostClassifier
+import warnings
+warnings.filterwarnings("ignore")
+
+data=pd.read_csv("Iris.csv")
+len(data)
+print(data.shape)
+
+data.head()
+
+X = data.iloc[:,:-1]
+y = data.iloc[:,-1]
+print("Shape of X is %s and shape of y is %s"%(X.shape,y.shape))
+
+total_classes = y.nunique()
+print("Number of unique species in dataset are: ",total_classes)
+
+
+distribution = y.value_counts()
+print(distribution)
+
+#Splitting the data set
+X_train, X_val, Y_train, Y_val = train_test_split(X, y, test_size=0.25, random_state=28)
+
+#Applying AdaBoost
+# Creating adaboost classifier model
+adb = AdaBoostClassifier()
+adb_model = adb.fit(X_train,Y_train)
+
+print("The accuracy of the model on validation set is", adb_model.score(X_val,Y_val))
+
+
+prac 4 Xgboost
+
+import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+import xgboost as xgb
+
+from sklearn.datasets import load_iris
+iris = load_iris()
+data = pd.DataFrame(data=np.c_[iris['data'], iris['target']], columns=iris['feature_names'] + ['target'])
+
+X = data.drop('target', axis=1)
+y = data['target']
+
+# Create an XGBoost classifier
+model = xgb.XGBClassifier(objective='multi:softmax', num_class=3, seed=42)
+
+# Train the model
+model.fit(X_train, y_train)
+
+# Predictions on the test set
+y_pred = model.predict(X_test)
+
+accuracy = accuracy_score(y_test, y_pred)
+print(f'Accuracy: {accuracy:.2f}')
+
+# Plot feature importance
+import matplotlib.pyplot as plt
+
+xgb.plot_importance(model)
+plt.show()
+
+
+prac 5 Bagging regression
+
+
+# test regression dataset
+from sklearn.datasets import make_regression
+# define dataset
+X, y = make_regression(n_samples=1000, n_features=20, n_informative=15, noise=0.1, random_state=5)
+# summarize the dataset
+print(X.shape, y.shape)
+
+# evaluate bagging ensemble for regression
+from numpy import mean
+from numpy import std
+from sklearn.datasets import make_regression
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import RepeatedKFold
+from sklearn.ensemble import BaggingRegressor
+# define dataset
+X, y = make_regression(n_samples=1000, n_features=20, n_informative=15, noise=0.1, random_state=5)
+# define the model
+model = BaggingRegressor()
+# evaluate the model
+cv = RepeatedKFold(n_splits=10, n_repeats=3, random_state=1)
+n_scores = cross_val_score(model, X, y, scoring='neg_mean_absolute_error', cv=cv, n_jobs=-1, error_score='raise')
+# report performance
+print('MAE: %.3f (%.3f)' % (mean(n_scores), std(n_scores)))
+
+# bagging ensemble for making predictions for regression
+from sklearn.datasets import make_regression
+from sklearn.ensemble import BaggingRegressor
+# define dataset
+X, y = make_regression(n_samples=1000, n_features=20, n_informative=15, noise=0.1, random_state=5)
+# define the model
+model = BaggingRegressor()
+# fit the model on the whole dataset
+model.fit(X, y)
+# make a single prediction
+row = [[0.88950817,-0.93540416,0.08392824,0.26438806,-0.52828711,-1.21102238,-0.4499934,1.47392391,-0.19737726,-0.22252503,0.02307668,0.26953276,0.03572757,-0.51606983,-0.39937452,1.8121736,-0.00775917,-0.02514283,-0.76089365,1.58692212]]
+yhat = model.predict(row)
+print('Prediction: %d' % yhat[0])
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
